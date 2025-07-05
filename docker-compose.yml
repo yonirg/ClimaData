@@ -1,0 +1,92 @@
+version: "3.8"
+
+services:
+
+  # ─────────── RABBITMQ + CELERY ────────────────────────────
+  broker:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"    # AMQP
+      - "15672:15672"  # Management UI
+    volumes:
+      - broker_data:/var/lib/rabbitmq
+
+  worker:
+    build:
+      context: .
+      dockerfile: engines/celery/Dockerfile
+    depends_on:
+      - broker
+    environment:
+      - C_FORCE_ROOT=1
+      - CELERY_BROKER_URL=amqp://guest:guest@broker:5672//
+      - CELERY_RESULT_BACKEND=rpc://
+      - WORKER_QUEUE=${WORKER_QUEUE:-climadata}
+    command: >
+      celery -A engines.celery.worker_tasks worker
+             --loglevel=info --concurrency=1
+             -Q ${WORKER_QUEUE:-climadata}
+    volumes:
+      - ./data:/data:rw
+      - ./engines/celery:/app/engines/celery:ro
+  # ─────────── APACHE SPARK ─────────────────────────────────
+  spark-master:
+    image: bitnami/spark:3.5
+    environment:
+      - SPARK_MODE=master
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data:rw
+      - ./engines:/app/engines:ro
+
+  spark-worker:
+    image: bitnami/spark:3.5
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+    volumes:
+      - ./data:/data:rw
+      - ./engines:/app/engines:ro
+
+  executor:
+    build:
+      context: .
+      dockerfile: engines/spark/Dockerfile
+    depends_on:
+      - spark-master
+      - spark-worker
+    environment:
+      - HADOOP_USER_NAME=spark
+    volumes:
+      - ./data:/data:rw
+      - ./ivy:/opt/bitnami/spark/ivy
+      - ./engines/spark:/app/engines/spark:ro
+
+  # ─────────── DASHBOARD (Streamlit) ───────────────────────
+  dashboard:
+    build: ./dashboard
+    command: streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data:rw
+      - ./data:/data:rw
+      - ./controller:/app/controller:ro
+      - ./weather:/app/weather:ro
+      - ./engines:/app/engines:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - broker
+      - worker
+      - executor
+    environment:
+      - PYTHONPATH=/app
+      - CELERY_BROKER_URL=amqp://guest:guest@broker:5672//
+      - CELERY_RESULT_BACKEND=rpc://
+
+volumes:
+  broker_data: {}
+  ivy: {}
