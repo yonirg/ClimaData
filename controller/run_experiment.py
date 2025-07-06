@@ -92,7 +92,7 @@ def main():
                 "spark-submit",
                 "--conf", "spark.jars.ivy=/tmp/.ivy2",
                 "--master", "spark://spark-master:7077",
-                "--executor-cores", "1",
+                "--executor-cores", str(k),
                 "/app/engines/spark/job_spark.py",
                 "--data", "/data/weather_events.parquet",
                 "--out", "/data/results_spark_k1",
