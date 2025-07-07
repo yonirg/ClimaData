@@ -14,7 +14,7 @@ def get_executor_container():
     # filtra pelo label que o Compose aplica aos containers
     out = subprocess.check_output([
         "docker", "ps",
-        "--filter", "label=com.docker.compose.service=executor",
+        "--filter", "name=executor",
         "--format", "{{.Names}}"
     ], text=True)
     # pega o primeiro da lista
@@ -134,8 +134,8 @@ def main():
                 "--master", "spark://spark-master:7077",
                 "--total-executor-cores", str(k),
                 "/app/engines/spark/job_spark.py",
-                "--data", "/data/weather_events.parquet",
-                "--out", "/data/results_spark_k1",
+                "--data", data_in,
+                "--out", "/data/results_spark_k{k}",
                 "--k", str(k)
             ])
 
