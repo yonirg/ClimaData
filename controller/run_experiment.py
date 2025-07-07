@@ -143,7 +143,7 @@ def main():
                 "--total-executor-cores", str(k),
                 "/app/engines/spark/job_spark.py",
                 "--data", data_in,
-                "--out", "/data/results_spark_k{k}",
+                "--out", f"/data/results_spark_k{k}",
                 "--k", str(k)
             ])
 
