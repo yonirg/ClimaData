@@ -1,7 +1,0 @@
-engine,k,seconds
-multiproc,1,0.101
-celery,1,1.477
-spark,1,12.864
-multiproc,2,0.072
-celery,2,2.616
-spark,2,12.035
