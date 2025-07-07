@@ -7,8 +7,16 @@ import os
 
 
 def call(cmd):
-    out = subprocess.check_output(cmd, text=True)
-    return float(out.strip())
+    try:
+        out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
+    except subprocess.CalledProcessError as e:
+        print("=== comando que falhou:", " ".join(cmd), file=sys.stderr)
+        print("--- saída completa do erro:\n", e.output, file=sys.stderr)
+        raise
+    json_line = next((l for l in out.splitlines() if l.lstrip().startswith("{")), None)
+    if not json_line:
+        raise RuntimeError(f"Nenhum JSON na saída:\n{out}")
+    return json.loads(json_line)["seconds"]
 
 def get_executor_container():
     # filtra pelo label que o Compose aplica aos containers
