@@ -7,22 +7,14 @@ import os
 
 
 def call(cmd):
-    try:
-        out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
-    except subprocess.CalledProcessError as e:
-        print("=== comando que falhou:", " ".join(cmd), file=sys.stderr)
-        print("--- saída completa do erro:\n", e.output, file=sys.stderr)
-        raise
-    json_line = next((l for l in out.splitlines() if l.lstrip().startswith("{")), None)
-    if not json_line:
-        raise RuntimeError(f"Nenhum JSON na saída:\n{out}")
-    return json.loads(json_line)["seconds"]
+    out = subprocess.check_output(cmd, text=True)
+    return float(out.strip())
 
 def get_executor_container():
     # filtra pelo label que o Compose aplica aos containers
     out = subprocess.check_output([
         "docker", "ps",
-        "--filter", "name=executor",
+        "--filter", "label=com.docker.compose.service=executor",
         "--format", "{{.Names}}"
     ], text=True)
     # pega o primeiro da lista
@@ -71,8 +63,6 @@ def main():
             writer.writerow(["engine", "k", "seconds"])
         # ---------- 2) executar todas combinações ----------
         for k in ks:
-            env = os.environ.copy()
-            env["WORKER_CONCURRENCY"] = str(k)
             # ---- multiproc ----
             secs = call(
                 [sys.executable, "-m", "engines.multiproc.process_mp",
@@ -85,17 +75,17 @@ def main():
             # 1) escala o serviço worker pra zero (para garantir container limpo)
             subprocess.run(
                 ["docker-compose", "-f", "/app/docker-compose.yml",
-                 "up", "-d", "--no-deps", "--force-recreate", "--scale", "worker=0",
-                 "worker"],
-                check=True, env=env,
+                 "up", "-d", "--no-deps", "--scale", "worker=0",
+                 "--no-build", "worker"],
+                check=True,
             )
 
             # 2) escala de volta pra um único container
             subprocess.run(
                 ["docker-compose", "-f", "/app/docker-compose.yml",
-                 "up", "-d", "--no-deps", "--force-recreate", "--scale", "worker=1",
-                 "worker"],
-                check=True, env=env,
+                 "up", "-d", "--no-deps", "--scale", "worker=1",
+                 "--no-build", "worker"],
+                check=True,
             )
             time.sleep(2)  # aguarda container subir
 
@@ -114,7 +104,7 @@ def main():
                 "docker", "exec", "-d", worker,
                 "celery", "-A", "engines.celery.worker_tasks", "worker",
                 "--loglevel=info", f"--concurrency={k}", "-Q", "climadata"
-            ], check=True, env=env)
+            ], check=True)
             time.sleep(3)  # deixa o worker registrar no broker
 
             # 5) dispara o job Celery
@@ -131,7 +121,7 @@ def main():
             subprocess.run([
                 "docker", "exec", worker,
                 "pkill", "-f", "celery"
-            ], check=False, env=env)
+            ], check=False)
 
             # ---- spark ----
             container = get_executor_container()
@@ -142,8 +132,8 @@ def main():
                 "--master", "spark://spark-master:7077",
                 "--total-executor-cores", str(k),
                 "/app/engines/spark/job_spark.py",
-                "--data", data_in,
-                "--out", f"/data/results_spark_k{k}",
+                "--data", "/data/weather_events.parquet",
+                "--out", "/data/results_spark_k1",
                 "--k", str(k)
             ])
 
