@@ -125,6 +125,9 @@ def main():
 
             # ---- spark ----
             container = get_executor_container()
+            fname = Path(data_parquet).name
+            data_in = f"/data/{fname}"
+            data_out = f"/data/results_spark_k{k}"
             secs = call([
                 "docker", "exec", "-i", container,
                 "spark-submit",
@@ -132,8 +135,8 @@ def main():
                 "--master", "spark://spark-master:7077",
                 "--total-executor-cores", str(k),
                 "/app/engines/spark/job_spark.py",
-                "--data", "/data/weather_events.parquet",
-                "--out", "/data/results_spark_k1",
+                "--data", data_in,
+                "--out", data_out,
                 "--k", str(k)
             ])
 
