@@ -37,7 +37,7 @@ def call(cmd: list[str]) -> float:
     # o script de cada engine imprime um JSON em 1 única linha
     try:
         out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
-    except subprocess.CalledProcessError as e:
+    except Exception as e:
         print("=== comando que falhou:", " ".join(cmd), file=sys.stderr)
         print("--- saída completa do comando:\n", e.output, file=sys.stderr)
         raise
