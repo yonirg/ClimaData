@@ -18,11 +18,13 @@ services:
     environment:
       - C_FORCE_ROOT=1
       - CELERY_BROKER_URL=amqp://guest:guest@broker:5672//
-      - CELERY_RESULT_BACKEND=rpc://
+      - CELERY_RESULT_BACKEND=rpc://  
       - WORKER_QUEUE=${WORKER_QUEUE:-climadata}
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-1}
     command: >
       celery -A engines.celery.worker_tasks worker
-             --loglevel=info --concurrency=1
+             --loglevel=info 
+             --concurrency ${WORKER_CONCURRENCY:-1}
              -Q ${WORKER_QUEUE:-climadata}
     volumes:
       - ./data:/data:rw
@@ -70,6 +72,7 @@ services:
     ports:
       - "8501:8501"
     volumes:
+      - ./docker-compose.yml:/app/docker-compose.yml:ro
       - ./data:/app/data:rw
       - ./data:/data:rw
       - ./controller:/app/controller:ro

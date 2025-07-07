@@ -3,6 +3,8 @@ import argparse, json, subprocess, sys, csv, time
 from pathlib import Path
 from weather.generator import WeatherDataGenerator
 import subprocess
+import os
+
 
 def call(cmd):
     out = subprocess.check_output(cmd, text=True)
@@ -70,20 +72,56 @@ def main():
             writer.writerow(["multiproc", k, secs]); fp.flush()
 
             # ---- celery ----
-            fname = Path(data_parquet).name
+            # 1) escala o serviço worker pra zero (para garantir container limpo)
+            subprocess.run(
+                ["docker-compose", "-f", "/app/docker-compose.yml",
+                 "up", "-d", "--no-deps", "--scale", "worker=0",
+                 "--no-build", "worker"],
+                check=True,
+            )
 
-            # usa caminhos *absolutos* no container, sob /data
-            data_in  = f"/data/{fname}"                       # entrada
-            data_out = f"/data/results_celery_k{k}"           # saída
+            # 2) escala de volta pra um único container
+            subprocess.run(
+                ["docker-compose", "-f", "/app/docker-compose.yml",
+                 "up", "-d", "--no-deps", "--scale", "worker=1",
+                 "--no-build", "worker"],
+                check=True,
+            )
+            time.sleep(2)  # aguarda container subir
 
+            # 3) descobre o nome do container worker
+            worker = (
+                subprocess.check_output([
+                    "docker", "ps",
+                    "--filter", "label=com.docker.compose.service=worker",
+                    "--format", "{{.Names}}"
+                ], text=True)
+                .splitlines()[0]
+            )
+
+            # 4) dentro dele, dispara o celery worker com --concurrency=k
+            subprocess.run([
+                "docker", "exec", "-d", worker,
+                "celery", "-A", "engines.celery.worker_tasks", "worker",
+                "--loglevel=info", f"--concurrency={k}", "-Q", "climadata"
+            ], check=True)
+            time.sleep(3)  # deixa o worker registrar no broker
+
+            # 5) dispara o job Celery
+            fname     = Path(data_parquet).name
+            data_in   = f"/data/{fname}"
+            data_out  = f"/data/results_celery_k{k}"
             secs = call([
-                sys.executable,  # garante usar o python dentro do container
-                "-m", "engines.celery.run_celery_job",
-                data_in,
-                str(k),
-                data_out
+                sys.executable, "-m", "engines.celery.run_celery_job",
+                data_in, str(k), data_out
             ])
             writer.writerow(["celery", k, secs]); fp.flush()
+
+            # 6) derruba o worker custom para liberar recursos
+            subprocess.run([
+                "docker", "exec", worker,
+                "pkill", "-f", "celery"
+            ], check=False)
 
             # ---- spark ----
             container = get_executor_container()
@@ -92,11 +130,11 @@ def main():
                 "spark-submit",
                 "--conf", "spark.jars.ivy=/tmp/.ivy2",
                 "--master", "spark://spark-master:7077",
-                "--executor-cores", str(k),
+                "--total-executor-cores", str(k),
                 "/app/engines/spark/job_spark.py",
                 "--data", "/data/weather_events.parquet",
                 "--out", "/data/results_spark_k1",
-                "--k", "1",
+                "--k", str(k)
             ])
 
             print(secs)
