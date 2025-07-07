@@ -35,9 +35,13 @@ def call(cmd: list[str]) -> float:
     """Executa comando, espera terminar, devolve segundos informados no JSON."""
     out = subprocess.check_output(cmd, text=True)
     # o script de cada engine imprime um JSON em 1 única linha
+    try:
+        out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
+    except subprocess.CalledProcessError as e:
+        print("=== comando que falhou:", " ".join(cmd), file=sys.stderr)
+        print("--- saída completa do comando:\n", e.output, file=sys.stderr)
+        raise
     json_line = next((l for l in out.splitlines() if l.lstrip().startswith("{")), None)
-    if not json_line:
-        raise RuntimeError(f"Nenhum JSON na saída:\n{out}")
     rec = json.loads(json_line)
     return rec["seconds"]
 
