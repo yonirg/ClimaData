@@ -63,6 +63,8 @@ def main():
             writer.writerow(["engine", "k", "seconds"])
         # ---------- 2) executar todas combinações ----------
         for k in ks:
+            env = os.environ.copy()
+            env["WORKER_CONCURRENCY"] = str(k)
             # ---- multiproc ----
             secs = call(
                 [sys.executable, "-m", "engines.multiproc.process_mp",
@@ -75,17 +77,17 @@ def main():
             # 1) escala o serviço worker pra zero (para garantir container limpo)
             subprocess.run(
                 ["docker-compose", "-f", "/app/docker-compose.yml",
-                 "up", "-d", "--no-deps", "--scale", "worker=0",
+                 "up", "-d", "--no-deps", "--force-recreate", "--scale", "worker=0",
                  "worker"],
-                check=True,
+                check=True, env=env,
             )
 
             # 2) escala de volta pra um único container
             subprocess.run(
                 ["docker-compose", "-f", "/app/docker-compose.yml",
-                 "up", "-d", "--no-deps", "--scale", "worker=1",
+                 "up", "-d", "--no-deps", "--force-recreate", "--scale", "worker=1",
                  "worker"],
-                check=True,
+                check=True, env=env,
             )
             time.sleep(2)  # aguarda container subir
 
@@ -104,7 +106,7 @@ def main():
                 "docker", "exec", "-d", worker,
                 "celery", "-A", "engines.celery.worker_tasks", "worker",
                 "--loglevel=info", f"--concurrency={k}", "-Q", "climadata"
-            ], check=True)
+            ], check=True, env=env)
             time.sleep(3)  # deixa o worker registrar no broker
 
             # 5) dispara o job Celery
@@ -121,7 +123,7 @@ def main():
             subprocess.run([
                 "docker", "exec", worker,
                 "pkill", "-f", "celery"
-            ], check=False)
+            ], check=False, env=env)
 
             # ---- spark ----
             container = get_executor_container()

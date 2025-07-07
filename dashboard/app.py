@@ -6,8 +6,8 @@ import os
 from pandas.errors import EmptyDataError  # ← mudança
 
 # ───── Placeholders para atualização em tempo real ─────
-placeholder_table = st.empty()
-placeholder_chart = st.empty()
+# placeholder_table = st.empty()
+# placeholder_chart = st.empty()
 
 st.title("Dashboard de Experimentos")
 
@@ -25,11 +25,14 @@ n_events = st.number_input(
 run_btn  = st.button("Iniciar experimento 🚀")
 
 # Função para desenhar tabela + gráfico
-def update_display(df):
-    placeholder_table.dataframe(df)
+def update_display(df, table_ph, chart_ph):
+    table_ph.dataframe(df)
     df_piv = df.pivot(index="k", columns="engine", values="seconds")
-    placeholder_chart.line_chart(df_piv)
+    chart_ph.line_chart(df_piv)
 
+st.subheader("Tempos por abordagem x k")
+table_ph = st.empty()
+chart_ph = st.empty()
 # 1) Ao clicar: dispara e marca estado de "running"
 if run_btn:
     # remove benchmark antigo para não misturar resultados
@@ -61,7 +64,7 @@ if st.session_state.get("running", False):
                     df_partial = pd.read_csv(bench_path)                     # ← movimento 2
                     # filtra só até o k atual, evita runs antigas
                     df_partial = df_partial[df_partial["k"] <= k_max]       # ← mudança
-                    update_display(df_partial)
+                    update_display(df_partial, table_ph, chart_ph)
                 except EmptyDataError:
                     # ainda não escreveu header completo, ignora
                     pass
@@ -79,12 +82,18 @@ if st.session_state.get("running", False):
 # 3) Quando não estiver mais rodando, lê a saída definitiva e plota
 if not st.session_state.get("running", False) and "proc" in st.session_state:
     bench_path = "data/benchmarks.csv"
-    if os.path.exists(bench_path) and os.path.getsize(bench_path) > 0:  # ← mudança
+    if os.path.exists(bench_path) and os.path.getsize(bench_path) > 0:
         try:
-            df = pd.read_csv(bench_path)                                 # ← movimento 3
-            df = df[df["k"] <= k_max]                                   # mantém coerência com input
+            df = pd.read_csv(bench_path)
+            df = df[df["k"] <= k_max]
             st.success("✅ Experimento concluído!")
+            update_display(df, table_ph, chart_ph)
             st.subheader("Tempos por abordagem x k")
-            update_display(df)
+            
+            # # Atualiza tabela e gráfico **no lugar certo**
+            # placeholder_table.dataframe(df)
+            # df_piv = df.pivot(index="k", columns="engine", values="seconds")
+            # placeholder_chart.line_chart(df_piv)
+            
         except EmptyDataError:
             st.error("O arquivo de resultados está vazio ou corrompido.")

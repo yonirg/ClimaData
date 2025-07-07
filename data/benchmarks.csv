@@ -1,10 +1,7 @@
 engine,k,seconds
-multiproc,1,25.944
-celery,1,16.302
-spark,1,28.134
-multiproc,2,17.958
-celery,2,25.077
-spark,2,29.548
-multiproc,3,18.174
-celery,3,36.477
-spark,3,35.562
+multiproc,1,0.101
+celery,1,1.477
+spark,1,12.864
+multiproc,2,0.072
+celery,2,2.616
+spark,2,12.035
