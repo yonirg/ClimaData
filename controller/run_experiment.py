@@ -76,7 +76,7 @@ def main():
             subprocess.run(
                 ["docker-compose", "-f", "/app/docker-compose.yml",
                  "up", "-d", "--no-deps", "--scale", "worker=0",
-                 "--no-build", "worker"],
+                 "worker"],
                 check=True,
             )
 
@@ -84,7 +84,7 @@ def main():
             subprocess.run(
                 ["docker-compose", "-f", "/app/docker-compose.yml",
                  "up", "-d", "--no-deps", "--scale", "worker=1",
-                 "--no-build", "worker"],
+                 "worker"],
                 check=True,
             )
             time.sleep(2)  # aguarda container subir
